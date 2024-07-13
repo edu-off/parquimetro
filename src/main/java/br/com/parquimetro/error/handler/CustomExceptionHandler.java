@@ -53,8 +53,8 @@ public class CustomExceptionHandler {
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public final ResponseEntity<ExceptionResponse> optimisticLockingFailure(StatusException ex, HttpServletRequest request) {
-        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.CONFLICT.value(), "conflito na atualização do documento, por favor, tente novamente mais tarde", request.getRequestURI());
+    public final ResponseEntity<ExceptionResponse> optimisticLockingFailure(OptimisticLockingFailureException ex, HttpServletRequest request) {
+        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.CONFLICT.value(),"conflito na atualização do documento, por favor, tente novamente mais tarde", request.getRequestURI());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(exceptionResponse);
     }
 

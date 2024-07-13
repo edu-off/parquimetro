@@ -171,7 +171,7 @@ public class EstacionamentoService {
         Predicate<Estacionamento> filtroTempo = estacionamento -> estacionamento.getSaidaPrevista().minusMinutes(15L).isBefore(LocalDateTime.now());
         Page<Estacionamento> estacionamentos = consultaPorStatus(0, StatusEstacionamento.EM_ANDAMENTO.toString());
         int totalPages = estacionamentos.getTotalPages();
-        int pageNumber = 0;
+        int pageNumber = 1;
         while (pageNumber <= totalPages) {
             estacionamentos.stream().parallel().filter(filtroModalidade.and(filtroTempo)).forEach(estacionamento -> {
                 LocalDateTime saidaPrevistaModalidadePorHora = estacionamento.getSaidaPrevista().plusHours(1L);
