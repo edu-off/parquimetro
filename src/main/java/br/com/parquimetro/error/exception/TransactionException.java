@@ -5,9 +5,9 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class DocumentNotFoundException extends RuntimeException {
+public class TransactionException extends RuntimeException {
 
-    public DocumentNotFoundException(String mensagem) {
+    public TransactionException(String mensagem) {
         super(mensagem);
     }
 

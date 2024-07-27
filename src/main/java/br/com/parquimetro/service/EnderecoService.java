@@ -21,13 +21,13 @@ public class EnderecoService {
     private ModelMapper modelMapper;
 
     @Transactional
-    protected Endereco adiciona(EnderecoDto dto) {
+    protected Endereco adiciona(EnderecoDto dto) throws Exception {
         Endereco endereco = modelMapper.map(dto, Endereco.class);
         return enderecoRepository.save(endereco);
     }
 
     @Transactional
-    protected Endereco atualiza(String id, EnderecoDto dto) {
+    protected Endereco atualiza(String id, EnderecoDto dto) throws Exception {
         Optional<Endereco> optionalEndereco = enderecoRepository.findById(id);
         if (optionalEndereco.isEmpty())
             throw new DocumentNotFoundException("endereço não existe");

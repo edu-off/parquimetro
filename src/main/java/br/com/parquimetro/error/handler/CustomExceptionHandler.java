@@ -24,32 +24,38 @@ public class CustomExceptionHandler {
 
     @ExceptionHandler(DocumentNotFoundException.class)
     public final ResponseEntity<ExceptionResponse> DocumentNotFound(DocumentNotFoundException ex, HttpServletRequest request) {
-        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.NOT_FOUND.value(), ex.getMensagem(), request.getRequestURI());
+        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.NOT_FOUND.value(), ex.getMessage(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exceptionResponse);
     }
 
     @ExceptionHandler(DuplicateEmailException.class)
     public final ResponseEntity<ExceptionResponse> duplicateEmail(DuplicateEmailException ex, HttpServletRequest request) {
-        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMensagem(), request.getRequestURI());
+        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMessage(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exceptionResponse);
     }
 
     @ExceptionHandler(StatusException.class)
     public final ResponseEntity<ExceptionResponse> statusError(StatusException ex, HttpServletRequest request) {
-        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMensagem(), request.getRequestURI());
+        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMessage(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exceptionResponse);
     }
 
     @ExceptionHandler(MetodoPagamentoException.class)
     public final ResponseEntity<ExceptionResponse> metodoPagamentoError(MetodoPagamentoException ex, HttpServletRequest request) {
-        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMensagem(), request.getRequestURI());
+        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMessage(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exceptionResponse);
     }
 
     @ExceptionHandler(EstacionamentoException.class)
     public final ResponseEntity<ExceptionResponse> estacionamentoError(EstacionamentoException ex, HttpServletRequest request) {
-        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMensagem(), request.getRequestURI());
+        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.BAD_REQUEST.value(), ex.getMessage(), request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(exceptionResponse);
+    }
+
+    @ExceptionHandler(TransactionException.class)
+    public final ResponseEntity<ExceptionResponse> transactionError(TransactionException ex, HttpServletRequest request) {
+        ExceptionResponse exceptionResponse = new ExceptionResponse(getTimestamp(), HttpStatus.INTERNAL_SERVER_ERROR.value(), ex.getMessage(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(exceptionResponse);
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)

@@ -18,13 +18,13 @@ public class PagamentoService {
     private PagamentoRepository pagamentoRepository;
 
     @Transactional
-    protected Pagamento registra(Double valor) {
+    protected Pagamento registra(Double valor) throws Exception {
         Pagamento pagamento = Pagamento.builder().status(StatusPagamento.PENDENTE.toString()).valor(valor).build();
         return pagamentoRepository.save(pagamento);
     }
 
     @Transactional
-    protected Pagamento efetiva(String pagamentoId, MetodoPagamento metodoPagamento) {
+    protected Pagamento efetiva(String pagamentoId, MetodoPagamento metodoPagamento) throws Exception {
         Pagamento pagamento = encontraPorId(pagamentoId);
         pagamento.setStatus(StatusPagamento.PAGO.toString());
         pagamento.setMetodoPagamento(metodoPagamento);

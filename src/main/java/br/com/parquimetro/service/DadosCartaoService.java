@@ -21,13 +21,13 @@ public class DadosCartaoService {
     private ModelMapper modelMapper;
 
     @Transactional
-    protected DadosCartao adiciona(DadosCartaoDto dto) {
+    protected DadosCartao adiciona(DadosCartaoDto dto) throws Exception {
         DadosCartao dadosCartao = modelMapper.map(dto, DadosCartao.class);
         return dadosCartaoRepository.save(dadosCartao);
     }
 
     @Transactional
-    protected DadosCartao atualiza(String id, DadosCartaoDto dto) {
+    protected DadosCartao atualiza(String id, DadosCartaoDto dto) throws Exception {
         Optional<DadosCartao> optionalDadosCartao = dadosCartaoRepository.findById(id);
         if (optionalDadosCartao.isEmpty())
             throw new DocumentNotFoundException("cartão não existe");

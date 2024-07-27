@@ -1,10 +1,12 @@
 package br.com.parquimetro.service;
 
 import br.com.parquimetro.dto.*;
+import br.com.parquimetro.enumerator.MetodosPagamento;
 import br.com.parquimetro.enumerator.ModalidadesEstacionamento;
 import br.com.parquimetro.enumerator.StatusEstacionamento;
 import br.com.parquimetro.error.exception.DocumentNotFoundException;
 import br.com.parquimetro.error.exception.EstacionamentoException;
+import br.com.parquimetro.error.exception.TransactionException;
 import br.com.parquimetro.model.*;
 import br.com.parquimetro.repository.EstacionamentoRepository;
 import org.modelmapper.ModelMapper;
@@ -14,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -21,12 +24,14 @@ import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 @Service
@@ -54,6 +59,9 @@ public class EstacionamentoService {
     private MongoTemplate mongoTemplate;
 
     @Autowired
+    private MongoTransactionManager transactionManager;
+
+    @Autowired
     private ModelMapper modelMapper;
 
     @Autowired
@@ -74,13 +82,16 @@ public class EstacionamentoService {
 
     public List<Estacionamento> encontraPorParteDoNomeCondutor(String termo) {
         Query query = new Query();
-        query.addCriteria(Criteria.where("condutor.$cpf").in(condutorService.encontraPorParteDoNome(termo)));
+        List<Condutor> condutores = condutorService.encontraPorParteDoNome(termo);
+        List<String> cpfs = condutores.parallelStream().map(Condutor::getCpf).toList();
+        query.addCriteria(Criteria.where("condutor.$id").in(cpfs));
         return mongoTemplate.find(query, Estacionamento.class);
     }
 
     public List<Estacionamento> encontraPorEmailCondutor(String email) {
         Query query = new Query();
-        query.addCriteria(Criteria.where("condutor.$email").is(email));
+        Condutor condutor = condutorService.encontraPorEmail(email);
+        query.addCriteria(Criteria.where("condutor.$id").is(condutor.getCpf()));
         return mongoTemplate.find(query, Estacionamento.class);
     }
 
@@ -121,11 +132,24 @@ public class EstacionamentoService {
                 precoService.calculaPrecoPorTempoFixo(estacionamento.getTempoDuracao().longValue(), estacionamento.getEntrada(), saida) :
                 precoService.calculaPrecoPorHora(estacionamento.getEntrada(), saida);
 
-        estacionamento.setStatus(StatusEstacionamento.ENCERRADO_PAGAMENTO_PENDENTE.toString());
-        estacionamento.setSaida(saida);
-        estacionamento.setPagamento(pagamentoService.registra(valor));
-        estacionamento = estacionamentoRepository.save(estacionamento);
-        EstacionamentoDto dto = modelMapper.map(estacionamento, EstacionamentoDto.class);
+        AtomicReference<Estacionamento> atomicEstacionamento = new AtomicReference<>(estacionamento);
+        AtomicReference<Estacionamento> atomicResultEstacionamento = new AtomicReference<>();
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            try {
+                Estacionamento recoverEstacionamento = atomicEstacionamento.get();
+                recoverEstacionamento.setStatus(StatusEstacionamento.ENCERRADO_PAGAMENTO_PENDENTE.toString());
+                recoverEstacionamento.setSaida(saida);
+                recoverEstacionamento.setPagamento(pagamentoService.registra(valor));
+                atomicResultEstacionamento.set(estacionamentoRepository.save(estacionamento));
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                throw new TransactionException("error ao registrar saída: " + e.getMessage());
+            }
+            return null;
+        });
+
+        EstacionamentoDto dto = modelMapper.map(atomicResultEstacionamento.get(), EstacionamentoDto.class);
         dto.setCondutor(modelMapper.map(estacionamento.getCondutor(), CondutorDto.class));
         dto.setVeiculo(modelMapper.map(estacionamento.getVeiculo(), VeiculoDto.class));
         dto.setPagamento(modelMapper.map(estacionamento.getPagamento(), PagamentoDto.class));
@@ -144,24 +168,39 @@ public class EstacionamentoService {
         if (optionalMetodoPagamento.isEmpty())
             throw new DocumentNotFoundException("metodo de pagamento não encontrado");
 
-        estacionamento.setPagamento(pagamentoService.efetiva(estacionamento.getPagamento().getId(), optionalMetodoPagamento.get()));
-        estacionamento.setStatus(StatusEstacionamento.ENCERRADO_PAGO.toString());
-        estacionamento = estacionamentoRepository.save(estacionamento);
-        EstacionamentoDto dto = modelMapper.map(estacionamento, EstacionamentoDto.class);
-        dto.setCondutor(modelMapper.map(estacionamento.getCondutor(), CondutorDto.class));
-        dto.setVeiculo(modelMapper.map(estacionamento.getVeiculo(), VeiculoDto.class));
-        dto.setPagamento(modelMapper.map(estacionamento.getPagamento(), PagamentoDto.class));
-        dto.getPagamento().setMetodoPagamento(modelMapper.map(estacionamento.getPagamento().getMetodoPagamento(), MetodoPagamentoDto.class));
-        dto.getPagamento().getMetodoPagamento().setDadosCartao(modelMapper.map(estacionamento.getPagamento().getMetodoPagamento().getDadosCartao(), DadosCartaoDto.class));
+        AtomicReference<Estacionamento> atomicEstacionamento = new AtomicReference<>(estacionamento);
+        AtomicReference<Estacionamento> atomicResultEstacionamento = new AtomicReference<>();
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            try {
+                Estacionamento recoverEstacionamento = atomicEstacionamento.get();
+                recoverEstacionamento.setPagamento(pagamentoService.efetiva(recoverEstacionamento.getPagamento().getId(), optionalMetodoPagamento.get()));
+                recoverEstacionamento.setStatus(StatusEstacionamento.ENCERRADO_PAGO.toString());
+                Estacionamento newEstacionamento = estacionamentoRepository.save(recoverEstacionamento);
+                atomicResultEstacionamento.set(newEstacionamento);
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                throw new TransactionException("error ao efetivar pagamento: " + e.getMessage());
+            }
+            return null;
+        });
 
-        String texto = String.format(paymentMessage.getText(), estacionamento.getPagamento().getValor().toString(),
-                estacionamento.getEntrada().toString(),
-                estacionamento.getSaida().toString(),
-                estacionamento.getCondutor().getNome(),
-                estacionamento.getVeiculo().getModelo(),
-                estacionamento.getVeiculo().getPlaca());
+        EstacionamentoDto dto = modelMapper.map(atomicResultEstacionamento.get(), EstacionamentoDto.class);
+        dto.setCondutor(modelMapper.map(atomicResultEstacionamento.get().getCondutor(), CondutorDto.class));
+        dto.setVeiculo(modelMapper.map(atomicResultEstacionamento.get().getVeiculo(), VeiculoDto.class));
+        dto.setPagamento(modelMapper.map(atomicResultEstacionamento.get().getPagamento(), PagamentoDto.class));
+        dto.getPagamento().setMetodoPagamento(modelMapper.map(atomicResultEstacionamento.get().getPagamento().getMetodoPagamento(), MetodoPagamentoDto.class));
+        if (!dto.getPagamento().getMetodoPagamento().getMetodo().equals(MetodosPagamento.PIX.toString()))
+            dto.getPagamento().getMetodoPagamento().setDadosCartao(modelMapper.map(atomicResultEstacionamento.get().getPagamento().getMetodoPagamento().getDadosCartao(), DadosCartaoDto.class));
 
-        emailService.sendSimpleMessage(paymentMessage, estacionamento.getCondutor().getEmail(), texto);
+        String texto = String.format(paymentMessage.getText(), atomicResultEstacionamento.get().getPagamento().getValor().toString(),
+                atomicResultEstacionamento.get().getEntrada().toString(),
+                atomicResultEstacionamento.get().getSaida().toString(),
+                atomicResultEstacionamento.get().getCondutor().getNome(),
+                atomicResultEstacionamento.get().getVeiculo().getModelo(),
+                atomicResultEstacionamento.get().getVeiculo().getPlaca());
+
+        emailService.sendSimpleMessage(paymentMessage, atomicResultEstacionamento.get().getCondutor().getContato().getEmail(), texto);
         return dto;
     }
 
@@ -181,7 +220,7 @@ public class EstacionamentoService {
                 if (estacionamento.getModalidade().equals(ModalidadesEstacionamento.POR_HORA.toString()))
                     atualizaSaidaPrevista(estacionamento, saidaPrevistaModalidadePorHora);
                 String texto = String.format(customMessage.getText(), estacionamento.getEntrada().toString(), saidaPrevista.toString());
-                emailService.sendSimpleMessage(customMessage, estacionamento.getCondutor().getEmail(), texto);
+                emailService.sendSimpleMessage(customMessage, estacionamento.getCondutor().getContato().getEmail(), texto);
             });
             estacionamentos = consultaPorStatus(pageNumber++, StatusEstacionamento.EM_ANDAMENTO.toString());
         }

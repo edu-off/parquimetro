@@ -2,15 +2,14 @@ package br.com.parquimetro.dto;
 
 import br.com.parquimetro.validation.annotation.CondutorExists;
 import br.com.parquimetro.validation.annotation.CondutorNotExists;
-import br.com.parquimetro.validation.annotation.EmailExists;
 import br.com.parquimetro.validation.group.AdicaoGroup;
 import br.com.parquimetro.validation.group.AtualizacaoGroup;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.validator.constraints.br.CPF;
-import org.springframework.validation.annotation.Validated;
 
 @Getter
 @Setter
@@ -33,24 +32,12 @@ public class CondutorDto {
     @NotEmpty(message = "o campo nome não pode ser vazio", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
     private String nome;
 
-    @NotNull(message = "o campo status não pode ser nulo", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    @NotEmpty(message = "o campo status não pode ser vazio", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    @Email(message = "o campo email deve possuir uma estrutura válida de e-mail", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    @EmailExists(message = "o e-mail preenchido já existe", groups = AdicaoGroup.class)
-    private String email;
-
-    @NotNull(message = "o campo ddd não pode ser nulo", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    @Positive(message = "o campo ddd nao pode ser zero ou menor que zero", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    @Digits(integer = 2, fraction = 0, message = "o campo ddd não pode ter casas decimais e não pode ter mais que 2 dígitos", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    private Integer ddd;
-
-    @NotNull(message = "o campo telefone não pode ser nulo", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    @Positive(message = "o campo telefone nao pode ser zero ou menor que zero", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    @Digits(integer = 9, fraction = 0, message = "o campo telefone não pode ter casas decimais e não pode ter mais que 9 dígitos", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
-    private Long telefone;
-
     @Valid
     @NotNull(message = "objeto endereco não pode ser nulo", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
     private EnderecoDto endereco;
+
+    @Valid
+    @NotNull(message = "objeto contato não pode ser nulo", groups = {AdicaoGroup.class, AtualizacaoGroup.class})
+    private ContatoDto contato;
 
 }

@@ -4,16 +4,20 @@ import br.com.parquimetro.dto.VeiculoDto;
 import br.com.parquimetro.enumerator.StatusAtivacao;
 import br.com.parquimetro.error.exception.DocumentNotFoundException;
 import br.com.parquimetro.error.exception.StatusException;
+import br.com.parquimetro.error.exception.TransactionException;
 import br.com.parquimetro.model.Veiculo;
 import br.com.parquimetro.repository.VeiculoRepository;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class VeiculoService {
@@ -26,6 +30,9 @@ public class VeiculoService {
 
     @Autowired
     private ModelMapper modelMapper;
+
+    @Autowired
+    private MongoTransactionManager transactionManager;
 
     public Page<Veiculo> encontraTodos(Pageable pageable) {
         return veiculoRepository.findAll(pageable);
@@ -42,9 +49,21 @@ public class VeiculoService {
     public VeiculoDto adiciona(String cpf, VeiculoDto dto) {
         Veiculo veiculo = modelMapper.map(dto, Veiculo.class);
         veiculo.setStatus(StatusAtivacao.ATIVO.toString());
-        veiculo = veiculoRepository.save(veiculo);
-        condutorService.vinculaVeiculo(cpf, veiculo);
-        return modelMapper.map(veiculo, VeiculoDto.class);
+        AtomicReference<VeiculoDto> atomicVeiculoDto = new AtomicReference<>();
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            try {
+                Veiculo newVeiculo = veiculoRepository.save(veiculo);
+                condutorService.vinculaVeiculo(cpf, newVeiculo);
+                atomicVeiculoDto.set(modelMapper.map(newVeiculo, VeiculoDto.class));
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                throw new TransactionException("erro ao adicionar veiculo: " + e.getMessage());
+            }
+            return null;
+        });
+
+        return atomicVeiculoDto.get();
     }
 
     @Transactional
@@ -55,9 +74,21 @@ public class VeiculoService {
         veiculo.setAno(dto.getAno());
         veiculo.setFabricante(dto.getFabricante());
         veiculo.setCor(dto.getCor());
-        veiculo = veiculoRepository.save(veiculo);
-        condutorService.atualizaVeiculo(cpf, veiculo);
-        return modelMapper.map(veiculo, VeiculoDto.class);
+        AtomicReference<VeiculoDto> atomicVeiculoDto = new AtomicReference<>();
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            try {
+                Veiculo newVeiculo = veiculoRepository.save(veiculo);
+                condutorService.atualizaVeiculo(cpf, newVeiculo);
+                atomicVeiculoDto.set(modelMapper.map(newVeiculo, VeiculoDto.class));
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                throw new TransactionException("erro ao atualizar veiculo");
+            }
+            return null;
+        });
+
+        return atomicVeiculoDto.get();
     }
 
     @Transactional
@@ -66,7 +97,17 @@ public class VeiculoService {
         if (veiculo.getStatus().equalsIgnoreCase(StatusAtivacao.ATIVO.toString()))
             throw new StatusException("veiculo já está ativo");
         veiculo.setStatus(StatusAtivacao.ATIVO.toString());
-        condutorService.atualizaVeiculo(cpf, veiculoRepository.save(veiculo));
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            try {
+                condutorService.atualizaVeiculo(cpf, veiculoRepository.save(veiculo));
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                throw new TransactionException("erro ao ativar veiculo");
+            }
+            return null;
+        });
     }
 
     @Transactional
@@ -75,7 +116,17 @@ public class VeiculoService {
         if (veiculo.getStatus().equalsIgnoreCase(StatusAtivacao.INATIVO.toString()))
             throw new StatusException("veiculo já está inativo");
         veiculo.setStatus(StatusAtivacao.INATIVO.toString());
-        condutorService.atualizaVeiculo(cpf, veiculoRepository.save(veiculo));
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            try {
+                condutorService.atualizaVeiculo(cpf, veiculoRepository.save(veiculo));
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                throw new TransactionException("erro ao inativar veiculo");
+            }
+            return null;
+        });
     }
 
 }
